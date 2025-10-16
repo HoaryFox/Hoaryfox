@@ -1,16 +1,15 @@
-﻿/*
-  Hoaryfox, a UCI chess playing engine derived from Stockfish 10
-  Copyright (C) 2004-2008 Tord Romstad
-  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski
-  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott
-  Copyright (C) 2019-2021 Hisayori Noda, Yu Nasu, Motohiro Isozaki
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
-  Hoaryfox is free software: you can redistribute it and/or modify
+  Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Hoaryfox is distributed in the hope that it will be useful,
+  Stockfish is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -79,22 +78,21 @@ void init(OptionsMap& o) {
   o["SyzygyProbeDepth"]      << Option(1, 1, 100);
   o["Syzygy50MoveRule"]      << Option(true);
   o["SyzygyProbeLimit"]      << Option(7, 0, 7);
-  // 評価関数フォルダ。これを変更したとき、評価関数を次のisreadyタイミングで読み直す必要がある。
-  o["EvalDir"] << Option("eval", on_eval_dir);
-  // isreadyタイミングで評価関数を読み込まれると、新しい評価関数の変換のために
-  // test evalconvertコマンドを叩きたいのに、その新しい評価関数がないがために
-  // このコマンドの実行前に異常終了してしまう。
-  // そこでこの隠しオプションでisready時の評価関数の読み込みを抑制して、
-  // test evalconvertコマンドを叩く。
-  o["SkipLoadingEval"] << Option(false);
-  // 定跡の指し手を何手目まで用いるか
-  o["BookMoves"] << Option(16, 0, 10000);
-
-#if defined(EVAL_LEARN)
-  // 評価関数の学習を行なうときは、評価関数の保存先のフォルダを変更できる。
-  // デフォルトではevalsave。このフォルダは事前に用意されているものとする。
-  // このフォルダ配下にフォルダを"0/","1/",…のように自動的に掘り、そこに評価関数ファイルを保存する。
-  o["EvalSaveDir"] << Option("evalsave");
+  	  // �]���֐��t�H���_�B�����ύX�����Ƃ��A�]���֐�������isready�^�C�~���O�œǂݒ����K�v������B	
+  o["EvalDir"]               << Option("eval", on_eval_dir);	
+  // isready�^�C�~���O�ŕ]���֐���ǂݍ��܂��ƁA�V�����]���֐��̕ϊ��̂��߂�	
+  // test evalconvert�R�}���h��@�������̂ɁA���̐V�����]���֐����Ȃ������߂�	
+  // ���̃R�}���h�̎��s�O�Ɉُ�I�����Ă��܂��B	
+  // �����ł��̉B���I�v�V������isready���̕]���֐��̓ǂݍ��݂�}�����āA	
+  // test evalconvert�R�}���h��@���B	
+  o["SkipLoadingEval"]       << Option(false);	
+  // ��Ղ̎w���������ڂ܂ŗp���邩	
+  o["BookMoves"] << Option(16, 0, 10000);	
+#if defined(EVAL_LEARN)	
+  // �]���֐��̊w�K���s�Ȃ��Ƃ��́A�]���֐��̕ۑ���̃t�H���_��ύX�ł���B	
+  // �f�t�H���g�ł�evalsave�B���̃t�H���_�͎��O�ɗp�ӂ���Ă�����̂Ƃ���B	
+  // ���̃t�H���_�z���Ƀt�H���_��"0/","1/",�c�̂悤�Ɏ����I�Ɍ@��A�����ɕ]���֐��t�@�C����ۑ�����B	
+  o["EvalSaveDir"] << Option("evalsave");	
 #endif
 }
 
@@ -193,6 +191,6 @@ Option& Option::operator=(const string& v) {
   return *this;
 }
 
-// 評価関数を読み込んだかのフラグ。これはevaldirの変更にともなってfalseにする。
+// �]���֐���ǂݍ��񂾂��̃t���O�B�����evaldir�̕ύX�ɂƂ��Ȃ���false�ɂ���B	
 bool load_eval_finished = false;
 } // namespace UCI

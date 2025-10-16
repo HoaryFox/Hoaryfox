@@ -1,16 +1,15 @@
-﻿/*
-  Hoaryfox, a UCI chess playing engine derived from Stockfish 10
-  Copyright (C) 2004-2008 Tord Romstad
-  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski
-  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott
-  Copyright (C) 2019-2021 Hisayori Noda, Yu Nasu, Motohiro Isozaki
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
-  Hoaryfox is free software: you can redistribute it and/or modify
+  Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Hoaryfox is distributed in the hope that it will be useful,
+  Stockfish is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -34,38 +33,46 @@
 #include "uci.h"
 #include "syzygy/tbprobe.h"
 
+#if defined(EVAL_NNUE) && defined(ENABLE_TEST_CMD)	
+#include "eval/nnue/nnue_test_command.h"	
+#endif
+
 using namespace std;
 
 extern vector<string> setup_bench(const Position&, istream&);
 
-// FEN string of the initial position, normal chess
-const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-
-// 棋譜を自動生成するコマンド
-#if defined (EVAL_LEARN)
-namespace Learner
-{
-	// 教師局面の自動生成
-	void gen_sfen(Position& pos, istringstream& is);
-
-	// 生成した棋譜からの学習
-	void learn(Position& pos, istringstream& is);
-
-#if defined(GENSFEN2019)
-	// 開発中の教師局面の自動生成コマンド
-	void gen_sfen2019(Position& pos, istringstream& is);
-#endif
-
-	// 読み筋と評価値のペア。Learner::search(),Learner::qsearch()が返す。
-	typedef std::pair<Value, std::vector<Move> > ValueAndPV;
-
-	ValueAndPV qsearch(Position& pos);
-	ValueAndPV search(Position& pos, int depth_, size_t multiPV = 1, uint64_t nodesLimit = 0);
-
-}
-#endif
-
+// FEN string of the initial position, normal chess	
+const char* StartFEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";	
+// ������������������R�}���h	
+#if defined (EVAL_LEARN)	
+namespace Learner	
+{	
+  // ���t�ǖʂ̎�������	
+  void gen_sfen(Position& pos, istringstream& is);	
+  // ����������������̊w�K	
+  void learn(Position& pos, istringstream& is);	
+#if defined(GENSFEN2019)	
+  // �J�����̋��t�ǖʂ̎��������R�}���h	
+  void gen_sfen2019(Position& pos, istringstream& is);	
+#endif	
+  // �ǂ݋؂ƕ]���l�̃y�A�BLearner::search(),Learner::qsearch()���Ԃ��B	
+  typedef std::pair<Value, std::vector<Move> > ValueAndPV;	
+  ValueAndPV qsearch(Position& pos);	
+  ValueAndPV search(Position& pos, int depth_, size_t multiPV = 1, uint64_t nodesLimit = 0);	
+}	
+#endif	
+#if defined(EVAL_NNUE) && defined(ENABLE_TEST_CMD)	
+void test_cmd(Position& pos, istringstream& is)	
+{	
+    // �T�������邩���m��Ȃ��̂ŏ��������Ă����B	
+    is_ready();	
+    std::string param;	
+    is >> param;	
+    if (param == "nnue") Eval::NNUE::TestCommand(pos, is);	
+}	
+#endif	
 namespace {
+
 
   // position() is called when engine receives the "position" UCI command.
   // The function sets up the position described in the given FEN string ("fen")
@@ -201,114 +208,98 @@ namespace {
          << "\nNodes/second    : " << 1000 * nodes / elapsed << endl;
   }
 
-  // check sumを計算したとき、それを保存しておいてあとで次回以降、整合性のチェックを行なう。
+  // check sum���v�Z�����Ƃ��A�����ۑ����Ă����Ă��ƂŎ���ȍ~�A�������̃`�F�b�N���s�Ȃ��B	
   uint64_t eval_sum;
+  
 } // namespace
 
-// is_ready_cmd()を外部から呼び出せるようにしておく。(benchコマンドなどから呼び出したいため)
-// 局面は初期化されないので注意。
-void is_ready(bool skipCorruptCheck)
-{
-#if defined(EVAL_NNUE)
-	// "isready"を受け取ったあと、"readyok"を返すまで5秒ごとに改行を送るように修正する。(keep alive的な処理)
-	//	USI2.0の仕様より。
-	//  -"isready"のあとのtime out時間は、30秒程度とする。これを超えて、評価関数の初期化、hashテーブルの確保をしたい場合、
-	//  思考エンジン側から定期的に何らかのメッセージ(改行可)を送るべきである。
-	//  -ShogiGUIではすでにそうなっているので、MyShogiもそれに追随する。
-	//  -また、やねうら王のエンジン側は、"isready"を受け取ったあと、"readyok"を返すまで5秒ごとに改行を送るように修正する。
-
-	auto ended = false;
-	auto th = std::thread([&ended] {
-		int count = 0;
-		while (!ended)
-		{
-			std::this_thread::sleep_for(std::chrono::milliseconds(100));
-			if (++count >= 50 /* 5秒 */)
-			{
-				count = 0;
-				sync_cout << sync_endl; // 改行を送信する。
-			}
-		}
-		});
-
-	// 評価関数の読み込みなど時間のかかるであろう処理はこのタイミングで行なう。
-	// 起動時に時間のかかる処理をしてしまうと将棋所がタイムアウト判定をして、思考エンジンとしての認識をリタイアしてしまう。
-	if (!UCI::load_eval_finished)
-	{
-		// 評価関数の読み込み
-		Eval::load_eval();
-
-		// チェックサムの計算と保存(その後のメモリ破損のチェックのため)
-		eval_sum = Eval::calc_check_sum();
-
-		// ソフト名の表示
-		Eval::print_softname(eval_sum);
-
-		UCI::load_eval_finished = true;
-
-	}
-	else
-	{
-		// メモリが破壊されていないかを調べるためにチェックサムを毎回調べる。
-		// 時間が少しもったいない気もするが.. 0.1秒ぐらいのことなので良しとする。
-		if (!skipCorruptCheck && eval_sum != Eval::calc_check_sum())
-			sync_cout << "Error! : EVAL memory is corrupted" << sync_endl;
-	}
-
-	// isreadyに対してはreadyokを返すまで次のコマンドが来ないことは約束されているので
-	// このタイミングで各種変数の初期化もしておく。
-
-	TT.resize(Options["Hash"]);
-	Search::clear();
-	Time.availableNodes = 0;
-
-	Threads.stop = false;
-
-	// keep aliveを送信するために生成したスレッドを終了させ、待機する。
-	ended = true;
-	th.join();
-#endif  // defined(EVAL_NNUE)
-
-	sync_cout << "readyok" << sync_endl;
-}
-
-
-// --------------------
-// テスト用にqsearch(),search()を直接呼ぶ
-// --------------------
-
-#if defined(EVAL_LEARN)
-void qsearch_cmd(Position & pos)
-{
-	cout << "qsearch : ";
-	auto pv = Learner::qsearch(pos);
-	cout << "Value = " << pv.first << " , " << UCI::value(pv.first) << " , PV = ";
-	for (auto m : pv.second)
-		cout << UCI::move(m, false) << " ";
-	cout << endl;
-}
-
-void search_cmd(Position & pos, istringstream & is)
-{
-	string token;
-	int depth = 1;
-	int multi_pv = (int)Options["MultiPV"];
-	while (is >> token)
-	{
-		if (token == "depth")
-			is >> depth;
-		if (token == "multipv")
-			is >> multi_pv;
-	}
-
-	cout << "search depth = " << depth << " , multi_pv = " << multi_pv << " : ";
-	auto pv = Learner::search(pos, depth, multi_pv);
-	cout << "Value = " << pv.first << " , " << UCI::value(pv.first) << " , PV = ";
-	for (auto m : pv.second)
-		cout << UCI::move(m, false) << " ";
-	cout << endl;
-}
-
+	// is_ready_cmd()���O������Ăяo����悤�ɂ��Ă����B(bench�R�}���h�Ȃǂ���Ăяo����������)	
+// �ǖʂ͏���������Ȃ��̂Œ��ӁB	
+void is_ready(bool skipCorruptCheck)	
+{	
+#if defined(EVAL_NNUE)	
+  // "isready"���󂯎�������ƁA"readyok"��Ԃ��܂�5�b���Ƃɉ��s�𑗂�悤�ɏC������B(keep alive�I�ȏ���)	
+  //	USI2.0�̎d�l���B	
+  //  -"isready"�̂��Ƃ�time out���Ԃ́A30�b���x�Ƃ���B����𒴂��āA�]���֐��̏������Ahash�e�[�u���̊m�ۂ��������ꍇ�A	
+  //  �v�l�G���W�����������I�ɉ��炩�̃��b�Z�[�W(���s��)�𑗂�ׂ��ł���B	
+  //  -ShogiGUI�ł͂��łɂ����Ȃ��Ă���̂ŁAMyShogi������ɒǐ�����B	
+  //  -�܂��A��˂��牤�̃G���W�����́A"isready"���󂯎�������ƁA"readyok"��Ԃ��܂�5�b���Ƃɉ��s�𑗂�悤�ɏC������B	
+  auto ended = false;	
+  auto th = std::thread([&ended] {	
+    int count = 0;	
+    while (!ended)	
+    {	
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));	
+      if (++count >= 50 /* 5�b */)	
+      {	
+        count = 0;	
+        sync_cout << sync_endl; // ���s�𑗐M����B	
+      }	
+    }	
+    });	
+  // �]���֐��̓ǂݍ��݂Ȃǎ��Ԃ̂�����ł��낤�����͂��̃^�C�~���O�ōs�Ȃ��B	
+  // �N�����Ɏ��Ԃ̂����鏈�������Ă��܂��Ə��������^�C���A�E�g��������āA�v�l�G���W���Ƃ��Ă̔F�������^�C�A���Ă��܂��B	
+  if (!UCI::load_eval_finished)	
+  {	
+    // �]���֐��̓ǂݍ���	
+    Eval::load_eval();	
+    // �`�F�b�N�T���̌v�Z�ƕۑ�(���̌�̃������j���̃`�F�b�N�̂���)	
+    eval_sum = Eval::calc_check_sum();	
+    // �\�t�g���̕\��	
+    Eval::print_softname(eval_sum);	
+    UCI::load_eval_finished = true;	
+  }	
+  else	
+  {	
+    // ���������j�󂳂�Ă��Ȃ����𒲂ׂ邽�߂Ƀ`�F�b�N�T���𖈉񒲂ׂ�B	
+    // ���Ԃ��������������Ȃ��C�����邪.. 0.1�b���炢�̂��ƂȂ̂ŗǂ��Ƃ���B	
+    if (!skipCorruptCheck && eval_sum != Eval::calc_check_sum())	
+      sync_cout << "Error! : EVAL memory is corrupted" << sync_endl;	
+  }	
+  // isready�ɑ΂��Ă�readyok��Ԃ��܂Ŏ��̃R�}���h�����Ȃ����Ƃ͖񑩂���Ă���̂�	
+  // ���̃^�C�~���O�Ŋe��ϐ��̏����������Ă����B	
+  TT.resize(Options["Hash"]);	
+  Search::clear();	
+  Time.availableNodes = 0;	
+  Threads.stop = false;	
+  // keep alive�𑗐M���邽�߂ɐ��������X���b�h���I�������A�ҋ@����B	
+  ended = true;	
+  th.join();	
+#endif  // defined(EVAL_NNUE)	
+  sync_cout << "readyok" << sync_endl;	
+}	
+// --------------------	
+// �e�X�g�p��qsearch(),search()�𒼐ڌĂ�	
+// --------------------	
+#if defined(EVAL_LEARN)	
+void qsearch_cmd(Position& pos)	
+{	
+  cout << "qsearch : ";	
+  auto pv = Learner::qsearch(pos);	
+  cout << "Value = " << pv.first << " , " << UCI::value(pv.first) << " , PV = ";	
+  for (auto m : pv.second)	
+    cout << UCI::move(m, false) << " ";	
+  cout << endl;	
+}	
+void search_cmd(Position& pos, istringstream& is)	
+{	
+  string token;	
+  int depth = 1;	
+  int multi_pv = (int)Options["MultiPV"];	
+  while (is >> token)	
+  {	
+    if (token == "depth")	
+      is >> depth;	
+    if (token == "multipv")	
+      is >> multi_pv;	
+  }	
+  cout << "search depth = " << depth << " , multi_pv = " << multi_pv << " : ";	
+  auto pv = Learner::search(pos, depth, multi_pv);	
+  cout << "Value = " << pv.first << " , " << UCI::value(pv.first) << " , PV = ";	
+  for (auto m : pv.second)	
+    cout << UCI::move(m, false) << " ";	
+  cout << endl;	
+}	
 #endif
 
 /// UCI::loop() waits for a command from stdin, parses it and calls the appropriate
@@ -367,18 +358,20 @@ void UCI::loop(int argc, char* argv[]) {
       else if (token == "bench") bench(pos, is, states);
       else if (token == "d")     sync_cout << pos << sync_endl;
       else if (token == "eval")  sync_cout << Eval::trace(pos) << sync_endl;
-#if defined (EVAL_LEARN)
-	  else if (token == "gensfen") Learner::gen_sfen(pos, is);
-	  else if (token == "learn") Learner::learn(pos, is);
-
-#if defined (GENSFEN2019)
-	  // 開発中の教師局面生成コマンド
-	  else if (token == "gensfen2019") Learner::gen_sfen2019(pos, is);
-#endif
-	  // テスト用にqsearch(),search()を直接呼ぶコマンド
-	  else if (token == "qsearch") qsearch_cmd(pos);
-	  else if (token == "search") search_cmd(pos, is);
-
+	  #if defined (EVAL_LEARN)	
+      else if (token == "gensfen") Learner::gen_sfen(pos, is);	
+      else if (token == "learn") Learner::learn(pos, is);	
+#if defined (GENSFEN2019)	
+      // �J�����̋��t�ǖʐ����R�}���h	
+      else if (token == "gensfen2019") Learner::gen_sfen2019(pos, is);	
+#endif	
+      // �e�X�g�p��qsearch(),search()�𒼐ڌĂԃR�}���h	
+      else if (token == "qsearch") qsearch_cmd(pos);	
+      else if (token == "search") search_cmd(pos, is);	
+#endif	
+#if defined(EVAL_NNUE) && defined(ENABLE_TEST_CMD)	
+      // �e�X�g�R�}���h	
+      else if (token == "test") test_cmd(pos, is);	
 #endif
       else
           sync_cout << "Unknown command: " << cmd << sync_endl;

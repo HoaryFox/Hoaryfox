@@ -1,16 +1,15 @@
-﻿/*
-  Hoaryfox, a UCI chess playing engine derived from Stockfish 10
-  Copyright (C) 2004-2008 Tord Romstad
-  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski
-  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott
-  Copyright (C) 2019-2021 Hisayori Noda, Yu Nasu, Motohiro Isozaki
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
-  Hoaryfox is free software: you can redistribute it and/or modify
+  Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Hoaryfox is distributed in the hope that it will be useful,
+  Stockfish is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -29,7 +28,7 @@
 #include <string>
 
 #include "bitboard.h"
-#include "evaluate.h"
+#include "evaluate.h"	
 #include "misc.h"
 #include "types.h"
 
@@ -57,12 +56,11 @@ struct StateInfo {
   Bitboard   blockersForKing[COLOR_NB];
   Bitboard   pinners[COLOR_NB];
   Bitboard   checkSquares[PIECE_TYPE_NB];
-
-#if defined(EVAL_NNUE)
-  Eval::NNUE::Accumulator accumulator;
-
-  // 評価値の差分計算の管理用
-  Eval::DirtyPiece dirtyPiece;
+  
+#if defined(EVAL_NNUE)	
+  Eval::NNUE::Accumulator accumulator;	
+  // �]���l�̍����v�Z�̊Ǘ��p	
+  Eval::DirtyPiece dirtyPiece;	
 #endif  // defined(EVAL_NNUE)
 };
 
@@ -78,8 +76,7 @@ typedef std::unique_ptr<std::deque<StateInfo>> StateListPtr;
 /// do_move() and undo_move(), used by the search to update node info when
 /// traversing the search tree.
 class Thread;
-
-// packされたsfen
+// pack���ꂽsfen	
 struct PackedSfen { uint8_t data[32]; };
 
 class Position {
@@ -175,37 +172,31 @@ public:
   // Position consistency check, for debugging
   bool pos_is_ok() const;
   void flip();
+  
+	#if defined(EVAL_NNUE) || defined(EVAL_LEARN)	
+  // --- StateInfo	
+  // ���݂̋ǖʂɑΉ�����StateInfo��Ԃ��B	
+  // ���Ƃ��΁Astate()->capturedPiece�ł���΁A�O�ǖʂŕߊl���ꂽ��i�[����Ă���B	
+  StateInfo* state() const { return st; }	
+  // �]���֐��Ŏg�����߂́A�ǂ̋�ԍ��̋�ǂ��ɂ��邩�Ȃǂ̏��B	
+  const Eval::EvalList* eval_list() const { return &evalList; }	
+#endif  // defined(EVAL_NNUE) || defined(EVAL_LEARN)	
+#if defined(EVAL_LEARN)	
+  // -- sfen���w���p	
+  // pack���ꂽsfen�𓾂�B�����Ɏw�肵���o�b�t�@�ɕԂ��B	
+  // gamePly��pack�Ɋ܂߂Ȃ��B	
+  void sfen_pack(PackedSfen& sfen);	
+  // ��sfen���o�R����ƒx���̂Œ���pack���ꂽsfen���Z�b�g����֐���������B	
+  // pos.set(sfen_unpack(data),si,th); �Ɠ����B	
+  // �n���ꂽ�ǖʂɖ�肪�����āA�G���[�̂Ƃ��͔�0��Ԃ��B	
+  // PackedSfen��gamePly�͊܂܂Ȃ��̂ŕ����ł��Ȃ��B������ݒ肵�����̂ł���Έ����Ŏw�肷�邱�ƁB	
+  int set_from_packed_sfen(const PackedSfen& sfen, StateInfo* si, Thread* th, bool mirror = false);	
+  // �ՖʂƎ��A��Ԃ�^���āA����sfen��Ԃ��B	
+  //static std::string sfen_from_rawdata(Piece board[81], Hand hands[2], Color turn, int gamePly);	
+  // c���̋ʂ̈ʒu��Ԃ��B	
+  Square king_square(Color c) const { return pieceList[make_piece(c, KING)][0]; }	
+	#endif // EVAL_LEARN
 
-#if defined(EVAL_NNUE) || defined(EVAL_LEARN)
-  // --- StateInfo
-
-  // 現在の局面に対応するStateInfoを返す。
-  // たとえば、state()->capturedPieceであれば、前局面で捕獲された駒が格納されている。
-  StateInfo* state() const { return st; }
-
-  // 評価関数で使うための、どの駒番号の駒がどこにあるかなどの情報。
-  const Eval::EvalList* eval_list() const { return &evalList; }
-#endif  // defined(EVAL_NNUE) || defined(EVAL_LEARN)
-
-#if defined(EVAL_LEARN)
-  // -- sfen化ヘルパ
-
-  // packされたsfenを得る。引数に指定したバッファに返す。
-  // gamePlyはpackに含めない。
-  void sfen_pack(PackedSfen& sfen);
-
-  // ↑sfenを経由すると遅いので直接packされたsfenをセットする関数を作った。
-  // pos.set(sfen_unpack(data),si,th); と等価。
-  // 渡された局面に問題があって、エラーのときは非0を返す。
-  // PackedSfenにgamePlyは含まないので復元できない。そこを設定したいのであれば引数で指定すること。
-  int set_from_packed_sfen(const PackedSfen& sfen, StateInfo* si, Thread* th, bool mirror = false);
-
-  // 盤面と手駒、手番を与えて、そのsfenを返す。
-  //static std::string sfen_from_rawdata(Piece board[81], Hand hands[2], Color turn, int gamePly);
-
-  // c側の玉の位置を返す。
-  Square king_square(Color c) const { return pieceList[make_piece(c, KING)][0]; }
-#endif // EVAL_LEARN
 private:
   // Initialization helpers (used while setting up a position)
   void set_castling_right(Color c, Square rfrom);
@@ -219,11 +210,10 @@ private:
   template<bool Do>
   void do_castling(Color us, Square from, Square& to, Square& rfrom, Square& rto);
 
-#if defined(EVAL_NNUE)
-  // 盤上のsqの升にある駒のPieceNumberを返す。
-  PieceNumber piece_no_of(Square sq) const;
+#if defined(EVAL_NNUE)	
+  // �Տ��sq�̏��ɂ�����PieceNumber��Ԃ��B	
+  PieceNumber piece_no_of(Square sq) const;	
 #endif  // defined(EVAL_NNUE)
-
   // Data members
   Piece board[SQUARE_NB];
   Bitboard byTypeBB[PIECE_TYPE_NB];
@@ -240,10 +230,10 @@ private:
   Thread* thisThread;
   StateInfo* st;
   bool chess960;
-
-#if defined(EVAL_NNUE) || defined(EVAL_LEARN)
-  // 評価関数で用いる駒のリスト
-  Eval::EvalList evalList;
+  
+#if defined(EVAL_NNUE) || defined(EVAL_LEARN)	
+  // �]���֐��ŗp�����̃��X�g	
+  Eval::EvalList evalList;	
 #endif  // defined(EVAL_NNUE) || defined(EVAL_LEARN)
 };
 
@@ -319,7 +309,7 @@ inline int Position::can_castle(CastlingRight cr) const {
 }
 
 inline int Position::can_castle(Color c) const {
-  return st->castlingRights& (c == WHITE ? WHITE_CASTLING : BLACK_CASTLING);
+  return st->castlingRights & ((WHITE_OO | WHITE_OOO) << (2 * c));
 }
 
 inline bool Position::castling_impeded(CastlingRight cr) const {

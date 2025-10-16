@@ -1,16 +1,15 @@
-﻿/*
-  Hoaryfox, a UCI chess playing engine derived from Stockfish 10
-  Copyright (C) 2004-2008 Tord Romstad
-  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski
-  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott
-  Copyright (C) 2019-2021 Hisayori Noda, Yu Nasu, Motohiro Isozaki
+/*
+  Stockfish, a UCI chess playing engine derived from Glaurung 2.1
+  Copyright (C) 2004-2008 Tord Romstad (Glaurung author)
+  Copyright (C) 2008-2015 Marco Costalba, Joona Kiiski, Tord Romstad
+  Copyright (C) 2015-2019 Marco Costalba, Joona Kiiski, Gary Linscott, Tord Romstad
 
-  Hoaryfox is free software: you can redistribute it and/or modify
+  Stockfish is free software: you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published by
   the Free Software Foundation, either version 3 of the License, or
   (at your option) any later version.
 
-  Hoaryfox is distributed in the hope that it will be useful,
+  Stockfish is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
   GNU General Public License for more details.
@@ -144,9 +143,7 @@ enum CastlingRight {
   WHITE_OOO = WHITE_OO << 1,
   BLACK_OO  = WHITE_OO << 2,
   BLACK_OOO = WHITE_OO << 3,
-  WHITE_CASTLING = WHITE_OO | WHITE_OOO,
-  BLACK_CASTLING = BLACK_OO | BLACK_OOO,
-  ANY_CASTLING = WHITE_CASTLING | BLACK_CASTLING,
+  ANY_CASTLING = WHITE_OO | WHITE_OOO | BLACK_OO | BLACK_OOO,
   CASTLING_RIGHT_NB = 16
 };
 
@@ -187,9 +184,8 @@ enum Value : int {
   RookValueMg   = 1289,  RookValueEg   = 1378,
   QueenValueMg  = 2529,  QueenValueEg  = 2687,
 
-  MidgameLimit  = 15258, EndgameLimit  = 3915,
-
-  // 評価関数の返す値の最大値(2**14ぐらいに収まっていて欲しいところだが..)
+  MidgameLimit  = 15258, EndgameLimit  = 3915,	
+  // �]���֐��̕Ԃ��l�̍ő�l(2**14���炢�Ɏ��܂��Ă��ė~�����Ƃ��낾��..)	
   VALUE_MAX_EVAL = 27000,
 };
 
@@ -234,8 +230,8 @@ enum Square : int {
   SQ_A8, SQ_B8, SQ_C8, SQ_D8, SQ_E8, SQ_F8, SQ_G8, SQ_H8,
   SQ_NONE,
 
-  SQUARE_ZERO = 0, SQUARE_NB = 64,
-  SQUARE_NB_PLUS1 = SQUARE_NB + 1, // 玉がいない場合、SQUARE_NBに移動したものとして扱うため、配列をSQUARE_NB+1で確保しないといけないときがあるのでこの定数を用いる。
+	  SQUARE_ZERO = 0, SQUARE_NB = 64,	
+  SQUARE_NB_PLUS1 = SQUARE_NB + 1, // �ʂ����Ȃ��ꍇ�ASQUARE_NB�Ɉړ��������̂Ƃ��Ĉ������߁A�z���SQUARE_NB+1�Ŋm�ۂ��Ȃ��Ƃ����Ȃ��Ƃ�������̂ł��̒萔��p����B
 };
 
 enum Direction : int {
@@ -464,42 +460,37 @@ constexpr bool is_ok(Move m) {
   return from_sq(m) != to_sq(m); // Catch MOVE_NULL and MOVE_NONE
 }
 
-// 盤面を180°回したときの升目を返す
-constexpr Square Inv(Square sq) { return (Square)((SQUARE_NB - 1) - sq); }
-
-// 盤面をミラーしたときの升目を返す
-constexpr Square Mir(Square sq) { return make_square(File(7 - (int)file_of(sq)), rank_of(sq)); }
-
-#if defined(EVAL_NNUE) || defined(EVAL_LEARN)
-// --------------------
-//        駒箱
-// --------------------
-
-// Positionクラスで用いる、駒リスト(どの駒がどこにあるのか)を管理するときの番号。
-enum PieceNumber : uint8_t
-{
-	PIECE_NUMBER_PAWN = 0,
-	PIECE_NUMBER_KNIGHT = 16,
-	PIECE_NUMBER_BISHOP = 20,
-	PIECE_NUMBER_ROOK = 24,
-	PIECE_NUMBER_QUEEN = 28,
-	PIECE_NUMBER_KING = 30,
-	PIECE_NUMBER_WKING = 30,
-	PIECE_NUMBER_BKING = 31, // 先手、後手の玉の番号が必要な場合はこっちを用いる
-	PIECE_NUMBER_ZERO = 0,
-	PIECE_NUMBER_NB = 32,
-};
-
-inline PieceNumber& operator++(PieceNumber & d) { return d = PieceNumber(int8_t(d) + 1); }
-inline PieceNumber operator++(PieceNumber & d, int) {
-	PieceNumber x = d;
-	d = PieceNumber(int8_t(d) + 1);
-	return x;
-}
-inline PieceNumber & operator--(PieceNumber & d) { return d = PieceNumber(int8_t(d) - 1); }
-
-// PieceNumberの整合性の検査。assert用。
-constexpr bool is_ok(PieceNumber pn) { return pn < PIECE_NUMBER_NB; }
+	// �Ֆʂ�180���񂵂��Ƃ��̏��ڂ�Ԃ�	
+constexpr Square Inv(Square sq) { return (Square)((SQUARE_NB - 1) - sq); }	
+// �Ֆʂ��~���[�����Ƃ��̏��ڂ�Ԃ�	
+constexpr Square Mir(Square sq) { return make_square(File(7 - (int)file_of(sq)), rank_of(sq)); }	
+#if defined(EVAL_NNUE) || defined(EVAL_LEARN)	
+// --------------------	
+//        �	
+// --------------------	
+// Position�N���X�ŗp����A��X�g(�ǂ̋�ǂ��ɂ���̂�)���Ǘ�����Ƃ��̔ԍ��B	
+enum PieceNumber : uint8_t	
+{	
+	PIECE_NUMBER_PAWN = 0,	
+	PIECE_NUMBER_KNIGHT = 16,	
+	PIECE_NUMBER_BISHOP = 20,	
+	PIECE_NUMBER_ROOK = 24,	
+	PIECE_NUMBER_QUEEN = 28,	
+	PIECE_NUMBER_KING = 30,	
+	PIECE_NUMBER_WKING = 30,	
+	PIECE_NUMBER_BKING = 31, // ���A���̋ʂ̔ԍ����K�v�ȏꍇ�͂�������p����	
+	PIECE_NUMBER_ZERO = 0,	
+	PIECE_NUMBER_NB = 32,	
+};	
+inline PieceNumber& operator++(PieceNumber& d) { return d = PieceNumber(int8_t(d) + 1); }	
+inline PieceNumber operator++(PieceNumber& d, int) {	
+  PieceNumber x = d;	
+  d = PieceNumber(int8_t(d) + 1);	
+  return x;	
+}	
+inline PieceNumber& operator--(PieceNumber& d) { return d = PieceNumber(int8_t(d) - 1); }	
+// PieceNumber�̐������̌����Bassert�p�B	
+constexpr bool is_ok(PieceNumber pn) { return pn < PIECE_NUMBER_NB; }	
 #endif  // defined(EVAL_NNUE) || defined(EVAL_LEARN)
 
 #endif // #ifndef TYPES_H_INCLUDED
